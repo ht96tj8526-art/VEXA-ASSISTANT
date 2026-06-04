@@ -254,7 +254,7 @@ const getGreeting = () => {
         ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const base64 = canvas.toDataURL('image/jpeg');
-        setImageBase64(base64); stopCamera(); return base64;
+       setImageBase64(base64); return base64;
       }
     }
     return null;
@@ -374,6 +374,12 @@ const getGreeting = () => {
                 speak(greeting);
                 return;
             }
+            // Add this inside your command processing block
+if (lower.includes('what do you see') || lower.includes('analyze this')) {
+  speak("Analyzing your surroundings, Sir.");
+  await captureAndSend("What is in this image?");
+  return;
+}
 
             let finalBase64 = null;
             if (stateRef.current.persona.id === 'jarvis') {
@@ -424,14 +430,32 @@ const getGreeting = () => {
     const file = e.target.files?.[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => setImageBase64(reader.result as string); reader.readAsDataURL(file); }
   };
-
+const captureAndSend = async (question: string) => {
+  if (!videoRef.current) return;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = videoRef.current.videoWidth;
+  canvas.height = videoRef.current.videoHeight;
+  canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+  
+  const base64Image = canvas.toDataURL('image/jpeg');
+  
+  // Now send this image to your existing sendMessage function
+  await sendMessage(question, base64Image);
+};
   const sendMessage = async (textToSend: string, overrideImage: string | null = null) => {
-    // 1. CLEAN RESET: Stop the mic immediately so it doesn't try to listen to the AI answer
-    if (recognition) {
-        try { recognition.stop(); } catch (e) {}
+    // 1. VISION TRIGGER: If user asks about seeing, capture the screen
+    let currentImage = overrideImage;
+    if ((textToSend.toLowerCase().includes('see') || textToSend.toLowerCase().includes('look')) && !currentImage) {
+        currentImage = captureImage(); 
     }
     
-    const finalImage = overrideImage || imageBase64;
+    // 1. CLEAN RESET: Stop the mic immediately
+    if (recognition) {
+        try { recognition.stop(); } catch (e) { }
+    }
+
+    const finalImage = currentImage || imageBase64;
     if (!textToSend.trim() && !finalImage) return;
     
     // ... (rest of your existing sendMessage code)

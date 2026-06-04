@@ -27,11 +27,14 @@ Never acknowledge the [[SAVE]] tag verbally to the user.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "openrouter/free", 
+        model:"google/gemma-4-31b-it:free",
         messages: [
-          { role: "system", content: finalPrompt },
-          ...messages
-        ],
+  { role: "system", content: finalPrompt },
+  ...messages.map((msg: { role: string; content: any }) => ({
+    role: msg.role,
+    content: typeof msg.content === 'string' ? msg.content : msg.content
+  }))
+],
         tools: [
           { type: "openrouter:web_search" }
         ]
