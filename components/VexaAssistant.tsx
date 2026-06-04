@@ -217,7 +217,13 @@ export default function VexaAssistant() {
   const [recognition, setRecognition] = useState<any>(null);
 
   const memoryKey = user ? `vexa_archive_${user.id}` : null;
-
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good morning, Sir.";
+  if (hour >= 12 && hour < 17) return "Good afternoon, Sir.";
+  if (hour >= 17 && hour < 22) return "Good evening, Sir.";
+  return "It's quite late, Sir. How may I help you at this hour?";
+};
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -361,11 +367,12 @@ export default function VexaAssistant() {
             if (stateRef.current.persona.id === 'jarvis' && lower.includes('jarvis')) {
                 playSystemSound('boot');
                 setStatus('listening');
-                speak("I am here, Sir. Go ahead.");
+                const greeting = getGreeting();
+                speak(greeting);
                 return;
             }
 
-            let finalBase64 = null; 
+            let finalBase64 = null;
             if (stateRef.current.persona.id === 'jarvis') {
                 if (lower.replace(/[^a-z]/g, '') === 'stop') { setAutoListen(false); setStatus('idle'); speak("Voice mode deactivated."); return; }
                 if (lower.includes('lockdown') || lower.includes('log out')) { setAutoListen(false); setStatus('idle'); speak("Initiating system lockdown."); setTimeout(() => signOut(), 2500); return; }
@@ -373,17 +380,16 @@ export default function VexaAssistant() {
                 if (lower.includes('dark mode')) { setIsLightMode(false); return; }
                 if (stateRef.current.showCamera && (lower.includes('look at') || lower.includes('scan'))) finalBase64 = captureImage();
             }
-            if (transcript && transcript.length > 3) sendMessage(transcript, finalBase64); 
+            if (transcript && transcript.length > 3) sendMessage(transcript, finalBase64);
           };
-        
-        try { rec.start(); } catch (e) { console.error("Mic start failed", e); }
+
         setRecognition(rec);
+        try { rec.start(); } catch (e) { console.error("Mic start failed", e); }
       } else {
         console.warn("Speech recognition is not supported in this browser.");
       }
     }
   }, [memoryKey, vaultKey]);
-
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isBooted]);
 
   const startNewChat = () => {
