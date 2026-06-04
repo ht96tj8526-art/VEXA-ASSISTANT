@@ -271,12 +271,10 @@ const getGreeting = () => {
 
   useEffect(() => {
     if (isBooted && activePersona.id === 'jarvis') {
-      const hours = new Date().getHours();
-      let greeting = "System online. All biometric systems green. How may I help you, Sir?";
-      if (hours >= 0 && hours < 5) greeting = "Working late, are we Sir? System online.";
-      else if (hours >= 5 && hours < 12) greeting = "Good morning, Sir. Core matrices loaded.";
-      speak(greeting);
-      setMessages([{ role: 'assistant', content: greeting }]);
+      const hours = (new Date().getUTCHours() + 5 + 30 / 60) % 24; 
+    let greeting = getGreeting(); // This calls your helper function!
+    speak(greeting);
+    setMessages([{ role: 'assistant', content: greeting }]);
     }
   }, [activePersona.id, isBooted]);
 
