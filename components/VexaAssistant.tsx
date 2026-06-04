@@ -261,22 +261,27 @@ const getGreeting = () => {
   };
 
   const handleBootSequence = () => {
-    playSystemSound('boot'); 
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      const unlock = new SpeechSynthesisUtterance(' ');
-      unlock.volume = 0; window.speechSynthesis.speak(unlock); window.speechSynthesis.getVoices(); 
-    }
-    setIsBooted(true);
-  };
+  playSystemSound('boot');
+  if (typeof window !== 'undefined' && window.speechSynthesis) {
+    // Get the dynamic greeting
+    const greeting = getGreeting();
+    
+    // Speak it
+    const utterance = new SpeechSynthesisUtterance(greeting);
+    window.speechSynthesis.speak(utterance);
+    
+    setMessages([{ role: 'assistant', content: greeting }]);
+  }
+  setIsBooted(true);
+};
 
   useEffect(() => {
-    if (isBooted && activePersona.id === 'jarvis') {
-      const hours = (new Date().getUTCHours() + 5 + 30 / 60) % 24; 
-    let greeting = getGreeting(); // This calls your helper function!
+  if (isBooted && activePersona.id === 'jarvis') {
+    const greeting = getGreeting();
     speak(greeting);
     setMessages([{ role: 'assistant', content: greeting }]);
-    }
-  }, [activePersona.id, isBooted]);
+  }
+}, [isBooted, activePersona.id]);
 
   const speak = (text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
