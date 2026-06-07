@@ -391,7 +391,7 @@ const getGreeting = () => {
         return;
       }
     }
-
+    
     // ... your existing wake word logic continues here
             
             // 🔥 WAKE WORD AGENT
@@ -413,6 +413,11 @@ const getGreeting = () => {
     // 🔍 AI DETECTION TRIGGER
     if (lower.includes('check for ai') || lower.includes('is this ai') || lower.includes('scan for ai')) {
         analyzeTextForAI();
+        return;
+    }
+    // 🎭 AI HUMANIZER TRIGGER
+    if (lower.includes('humanize this') || lower.includes('make this sound human') || lower.includes('rewrite this to bypass')) {
+        humanizeText();
         return;
     }
             // 📸 CAMERA CONTROLS
@@ -479,7 +484,41 @@ if (lower.includes('what do you see') || lower.includes('analyze this')) {
   };
 
   const exportCurrentSession = () => { /* Export Logic kept identical */ };
+const humanizeText = async () => {
+        // Find the last text message in the chat
+        const lastMessage = messages[messages.length - 1];
+        
+        if (!lastMessage || typeof lastMessage.content !== 'string') {
+            speak("There is no text currently available to humanize, Sir.");
+            return;
+        }
 
+        speak("Rewriting the text to bypass detection algorithms, Sir.");
+        setStatus('processing');
+
+        try {
+            const response = await fetch('/api/humanize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: lastMessage.content })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Add the newly humanized text into the chat interface
+                setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: data.humanizedText }]);
+                speak("The text has been successfully humanized and added to your records.");
+            } else {
+                throw new Error("API returned failure");
+            }
+        } catch (error) {
+            console.error(error);
+            speak("I encountered an error while attempting to humanize the text, Sir.");
+        } finally {
+            setStatus('idle');
+        }
+    };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => setImageBase64(reader.result as string); reader.readAsDataURL(file); }
