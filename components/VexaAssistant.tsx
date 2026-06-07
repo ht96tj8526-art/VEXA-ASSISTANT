@@ -202,6 +202,7 @@ export default function VexaAssistant() {
   const [showCamera, setShowCamera] = useState(false);
   const [isLightMode, setIsLightMode] = useState(false); 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const pendingAnswerRef = useRef<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   // 🧠 THE KNOWLEDGE VAULT STATE
@@ -215,7 +216,7 @@ export default function VexaAssistant() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [recognition, setRecognition] = useState<any>(null);
-
+  const hasGreetedRef = useRef<boolean>(false);
   const memoryKey = user ? `vexa_archive_${user.id}` : null;
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -225,13 +226,24 @@ const getGreeting = () => {
   return "It's quite late, Sir. How may I help you at this hour?";
 };
   const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-      streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-      setShowCamera(true);
-    } catch (err) { alert("Camera access denied by system."); }
-  };
+  try {
+    // 1. Request video permissions from the browser
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    streamRef.current = stream;
+    
+    // 2. The magic line: Attach the stream to the video element so you can see it
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+    
+    // 3. Show the UI
+    setShowCamera(true);
+    playSystemSound('boot'); // Optional: play a sound when it opens
+  } catch (err) {
+    console.error("Camera access denied:", err);
+    speak("I cannot access the camera, Sir. Please check your browser permissions.");
+  }
+};
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -364,17 +376,59 @@ const getGreeting = () => {
             if (!result.isFinal) return; 
 
             const transcript = result[0].transcript.trim();
-            const lower = transcript.toLowerCase();
+    const lower = transcript.toLowerCase();
+
+    // 🛑 NEW: Check if Jarvis is waiting for a Yes/No
+    if (pendingAnswerRef.current) {
+      if (lower.includes('yes') || lower.includes('yeah') || lower.includes('sure') || lower.includes('go ahead') || lower.includes('tell me')) {
+        const fullAnswer = pendingAnswerRef.current;
+        pendingAnswerRef.current = null; // Clear memory
+        speak(fullAnswer);
+        return;
+      } else if (lower.includes('no') || lower.includes('nope') || lower.includes('stop') || lower.includes('dont')) {
+        pendingAnswerRef.current = null; // Clear memory
+        speak("Understood, Sir.");
+        return;
+      }
+    }
+
+    // ... your existing wake word logic continues here
             
             // 🔥 WAKE WORD AGENT
-            if (stateRef.current.persona.id === 'jarvis' && lower.includes('jarvis')) {
-                playSystemSound('boot');
-                setStatus('listening');
-                const greeting = getGreeting();
-                speak(greeting);
-                return;
-            }
-            // Add this inside your command processing block
+    if (stateRef.current.persona.id === 'jarvis' && lower === 'jarvis') {
+        playSystemSound('boot');
+        setStatus('listening');
+        
+        // Check if he has already given the long greeting
+        if (!hasGreetedRef.current) {
+            const greeting = getGreeting();
+            speak(greeting);
+            hasGreetedRef.current = true; // Flip the switch so he remembers
+        } else {
+            // Short, snappy response for all subsequent wake-ups
+            speak("Yes, Sir?"); 
+        }
+        return;
+    }
+    // 🔍 AI DETECTION TRIGGER
+    if (lower.includes('check for ai') || lower.includes('is this ai') || lower.includes('scan for ai')) {
+        analyzeTextForAI();
+        return;
+    }
+            // 📸 CAMERA CONTROLS
+    if (lower.includes('open camera') || lower.includes('turn on camera') || lower.includes('enable vision')) {
+        startCamera();
+        speak("Vision systems activated, Sir.");
+        return;
+    }
+    if (lower.includes('close camera') || lower.includes('turn off camera')) {
+        stopCamera();
+        speak("Vision systems deactivated.");
+        return;
+    }
+
+    // Your existing vision trigger remains right below this:
+       
 if (lower.includes('what do you see') || lower.includes('analyze this')) {
   speak("Analyzing your surroundings, Sir.");
   await captureAndSend("What is in this image?");
@@ -387,10 +441,10 @@ if (lower.includes('what do you see') || lower.includes('analyze this')) {
                 if (lower.includes('lockdown') || lower.includes('log out')) { setAutoListen(false); setStatus('idle'); speak("Initiating system lockdown."); setTimeout(() => signOut(), 2500); return; }
                 if (lower.includes('light mode')) { setIsLightMode(true); return; }
                 if (lower.includes('dark mode')) { setIsLightMode(false); return; }
-                if (stateRef.current.showCamera && (lower.includes('look at') || lower.includes('scan'))) finalBase64 = captureImage();
+               if (stateRef.current.showCamera && (lower.includes('look at') || lower.includes('scan'))) finalBase64 = captureImage();
             }
             if (transcript && transcript.length > 3) sendMessage(transcript, finalBase64);
-          };
+        };
 
         setRecognition(rec);
         try { rec.start(); } catch (e) { console.error("Mic start failed", e); }
@@ -430,6 +484,45 @@ if (lower.includes('what do you see') || lower.includes('analyze this')) {
     const file = e.target.files?.[0];
     if (file) { const reader = new FileReader(); reader.onloadend = () => setImageBase64(reader.result as string); reader.readAsDataURL(file); }
   };
+  const analyzeTextForAI = async () => {
+        // Find the last text message in the chat
+        const lastMessage = messages[messages.length - 1];
+        
+        if (!lastMessage || typeof lastMessage.content !== 'string') {
+            speak("There is no text currently available to analyze, Sir.");
+            return;
+        }
+
+        speak("Scanning the recent text for artificial intelligence signatures, Sir.");
+        setStatus('processing');
+
+        try {
+            const response = await fetch('/api/detect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: lastMessage.content })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                if (data.aiProbability > 70) {
+                    speak(`Analysis complete. I detect a very high probability, roughly ${data.aiProbability} percent, that this text was generated by an AI.`);
+                } else if (data.aiProbability > 40) {
+                    speak(`Analysis complete. The results are mixed. There is a ${data.aiProbability} percent chance this contains AI generation.`);
+                } else {
+                    speak(`Analysis complete. It is highly likely this text is human-written. AI probability is only ${data.aiProbability} percent.`);
+                }
+            } else {
+                throw new Error("API returned failure");
+            }
+        } catch (error) {
+            console.error(error);
+            speak("I encountered an error while attempting to scan the text, Sir.");
+        } finally {
+            setStatus('idle');
+        }
+    };
 const captureAndSend = async (question: string) => {
   if (!videoRef.current) return;
   
@@ -519,7 +612,16 @@ const captureAndSend = async (question: string) => {
           if (memoryKey) localStorage.setItem(memoryKey, JSON.stringify(currentSessions));
         }
 
-        speak(cleanDisplayResponse); 
+        // Replace your old speak line with this:
+if (data.text.length > 50) { 
+    // Save the full response to your ref scratchpad and prompt the user
+    pendingAnswerRef.current = data.text;
+    speak("I have a detailed answer for that, Sir. Would you like me to read the full explanation?");
+} else {
+    // Read short answers normally
+    pendingAnswerRef.current = null;
+    speak(data.text);
+}
       } else setStatus('idle');
     } catch (error) { console.error(error); setStatus('idle'); }
   };
@@ -539,15 +641,17 @@ const captureAndSend = async (question: string) => {
     <div className="flex h-screen w-full bg-neutral-950 overflow-hidden text-neutral-100 font-mono select-none transition-all duration-700 ease-in-out" style={isLightMode ? { filter: 'invert(1) hue-rotate(180deg)' } : {}}>
       
       {/* LIVE CAMERA */}
-      {showCamera && (
-        <div className="absolute top-20 right-4 z-50 bg-neutral-900 border border-cyan-500/50 p-2 rounded-lg shadow-[0_0_30px_rgba(34,211,238,0.2)] animate-in fade-in zoom-in duration-300">
-          <div className="relative">
-            <video ref={videoRef} autoPlay playsInline className="w-48 md:w-64 h-auto rounded-md" style={{ transform: 'scaleX(-1)', filter: isLightMode ? 'invert(1) hue-rotate(180deg)' : 'none' }} />
-            <button onClick={() => captureImage()} className="absolute bottom-2 left-1/2 -translate-x-1/2 p-3 bg-cyan-500 text-neutral-950 rounded-full hover:scale-110 shadow-lg"><Aperture className="w-5 h-5" /></button>
-            <button onClick={stopCamera} className="absolute -top-3 -right-3 p-1.5 bg-red-500 text-white rounded-full hover:scale-110 shadow-lg"><X className="w-4 h-4" /></button>
-          </div>
-        </div>
-      )}
+<div className={`absolute top-20 right-4 z-50 bg-neutral-900 border border-cyan-500/50 p-2 rounded-lg shadow-[0_0_30px_rgba(0,255,255,0.15)] transition-all ${showCamera ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}>
+  <div className="relative">
+    <video ref={videoRef} autoPlay playsInline muted className="w-48 md:w-64 h-auto rounded-md" style={{ transform: 'scaleX(-1)' }} />
+    <button onClick={() => captureImage()} className="absolute bottom-2 left-1/2 -translate-x-1/2 p-3 bg-cyan-500 text-white rounded-full hover:bg-cyan-400 transition-colors shadow-lg">
+      📸 {/* Replace with your camera icon */}
+    </button>
+    <button onClick={stopCamera} className="absolute -top-3 -right-3 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-400 transition-colors shadow-md">
+      ✖ {/* Replace with your close icon */}
+    </button>
+  </div>
+</div>
 
       {/* SIDEBAR ARCHIVE */}
       <div className={`${isSidebarOpen ? 'w-64 md:w-72 border-r border-neutral-800 opacity-100' : 'w-0 opacity-0'} flex-shrink-0 h-full bg-neutral-900/95 flex flex-col transition-all duration-300 ease-in-out overflow-hidden z-30 relative`}>
