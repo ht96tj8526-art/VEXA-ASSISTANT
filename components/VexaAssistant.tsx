@@ -362,6 +362,26 @@ const createPresentation = async (topic: string) => {
         setStatus('idle');
     }
 };
+const generateImage = async (prompt: string) => {
+    speak(`Generating an image of ${prompt}, Sir.`);
+    setStatus('processing');
+    try {
+        const response = await fetch('/api/generate-image', {
+            method: 'POST',
+            body: JSON.stringify({ prompt })
+        });
+        const data = await response.json();
+        if (data.imageUrl) {
+            // Logic to display the image in your chat UI
+            console.log("Image URL:", data.imageUrl);
+            speak("The image has been generated, Sir.");
+        }
+    } catch {
+        speak("I encountered an error while generating the image.");
+    } finally {
+        setStatus('idle');
+    }
+};
   useEffect(() => {
     // 1. Load Transmissions & Vault
     if (memoryKey) {
@@ -458,6 +478,12 @@ const createPresentation = async (topic: string) => {
         return;
     }
     }
+    // 🎨 IMAGE GENERATION TRIGGER
+if (lower.includes('generate an image of') || lower.includes('create an image of')) {
+    const prompt = transcript.replace(/generate an image of/i, '').replace(/create an image of/i, '').trim();
+    generateImage(prompt);
+    return;
+}
             // 📸 CAMERA CONTROLS
     if (lower.includes('open camera') || lower.includes('turn on camera') || lower.includes('enable vision')) {
         startCamera();
