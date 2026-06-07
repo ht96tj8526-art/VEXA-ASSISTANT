@@ -330,7 +330,38 @@ const getGreeting = () => {
 
     window.speechSynthesis.getVoices().length === 0 ? window.speechSynthesis.onvoiceschanged = executeSpeech : executeSpeech();
   };
-
+const createPresentation = async (topic: string) => {
+    speak(`Structuring a professional presentation on ${topic}, Sir.`);
+    setStatus('processing');
+    
+    try {
+        const response = await fetch('/api/ppt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic })
+        });
+        const data = await response.json();
+        
+        // This creates a high-end HTML slide deck
+        const htmlContent = `
+            <html><body><h1>${data.slidesData.title}</h1>
+            ${data.slidesData.slides.map((s: any) => `<div><h2>${s.title}</h2><p>${s.content}</p></div>`).join('')}
+            </body></html>`;
+            
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${topic.replace(/\s+/g, '_')}_Presentation.html`;
+        a.click();
+        
+        speak("The presentation deck is ready, Sir. It has been downloaded to your system.");
+    } catch (e) {
+        speak("I failed to structure the presentation, Sir.");
+    } finally {
+        setStatus('idle');
+    }
+};
   useEffect(() => {
     // 1. Load Transmissions & Vault
     if (memoryKey) {
@@ -419,6 +450,13 @@ const getGreeting = () => {
     if (lower.includes('humanize this') || lower.includes('make this sound human') || lower.includes('rewrite this to bypass')) {
         humanizeText();
         return;
+        
+        // 📊 PPT CREATION TRIGGER
+    if (lower.includes('create a presentation') || lower.includes('make a ppt')) {
+        const topic = transcript.replace(/create a presentation on/i, '').replace(/make a ppt on/i, '').trim();
+        createPresentation(topic);
+        return;
+    }
     }
             // 📸 CAMERA CONTROLS
     if (lower.includes('open camera') || lower.includes('turn on camera') || lower.includes('enable vision')) {
